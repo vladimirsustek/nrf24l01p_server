@@ -73,7 +73,7 @@ void NRF_configure(bool ptx_nprx);
  void NRF_CEactivate(void);
  void NRF_CEdeactivate(void);
 
- uint8_t NRF_getInterrupt(void);
+ uint8_t NRF_getIRQ(void);
 
  void NRF_powerUp(void);
  void NRF_powerDown(void);

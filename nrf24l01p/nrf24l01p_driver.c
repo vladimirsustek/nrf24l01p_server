@@ -39,7 +39,8 @@
   *
   * In successful case the PRX's IRQ fires, the STATUS bit RX_DR is set as well as
   * RX_P_NO_2 - RX_P_NO_0 signalizes RX_PIPE (ERX_P0 means the RX_P_NO_2 - RX_P_NO_0
-  * and shall be 0). Also the PRX automatically sends ACK with payload back to the PTX.
+  * and shall be 0). Reading any of the NRF's IRQs is possible via NRF_getIRQ().
+  * Also the PRX automatically sends ACK with payload back to the PTX.
   * The PRX is capable to read the payload, it's length and provide it to the host.
   *
   * Note that the RX_DR stands for "received data flag".
@@ -912,7 +913,7 @@ uint8_t NRF_getNOP(void)
   * @brief Get interrupt flag. Shall be used by application to read whether IRQ fired.
   *
   */
-uint8_t NRF_getInterrupt(void)
+uint8_t NRF_getIRQ(void)
 {
 	return nrfport_getIRQ();
 }

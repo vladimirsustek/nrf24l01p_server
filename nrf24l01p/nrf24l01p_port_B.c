@@ -34,8 +34,17 @@
   * correct bit in GPIO register) must be assigned to fulfill  Chip Enable NRF's
   * functionality (Chip Enable represents RF activation - send or receive).
   *
-  * 3) nrfport_enISR_B(), nrfport_disISR_B(): Correct ISR function (or setting a
-  * correct bit in ISR register) in order to disable the NRF's interrupts.
+  * 3) nrfport_getISQ(): correct GPIO function or reading directly GPIO register
+  * to get NRF's IRQ pin state (Idle HIGH, when IRQ fires LOW).
+  *
+  * 4) nrfport_powerUp()/nrfport_powerDown(): functions controlling power supply
+  * line of the NRF24L01+ (when implemented). Note that NRF24L01+ module has no
+  * power line control so this function does not need to be called and implemented.
+  * When intended to be implemented a correct mechanism e.g. usage of transistor
+  * controlling the power supply line must be used.
+  *
+  * The advantage of powerUp/powerDown is hard reset as the NRF24L01+ may rarely
+  * reach a state where does not respond and is not possible to reset via SPI.
   */
 
 #include "nrf24l01p_defines.h"

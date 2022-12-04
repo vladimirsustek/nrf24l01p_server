@@ -75,11 +75,8 @@ void NRF_configure_B(bool ptx_nprx);
  void NRF_CEactivate_B(void);
  void NRF_CEdeactivate_B(void);
 
- void NRF_setInterrupt_B();
- uint8_t NRF_getInterrupt_B(uint8_t clear);
+ uint8_t NRF_getIRQ_B(uint8_t clear);
 
- void NRF_EnableInterrupt_B(void);
- void NRF_DisableInterrupt_B(void);
  void NRF_powerUp_B(void);
  void NRF_powerDown_B(void);
 #endif /* NRF24L01P_DRIVER_B_H_ */

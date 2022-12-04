@@ -186,7 +186,7 @@ void startPtxTask(void const * argument)
 		  startTick = osKernelSysTick();
 		  while(startTick + rxTimeout > osKernelSysTick())
 		  {
-			  if(NRF_getInterrupt())
+			  if(NRF_getIRQ())
 			  {
 #if NRF_DEBUG_MESSAGE
 				  printf("pTX IRQ\n");
@@ -290,7 +290,7 @@ void startPrxTask(void const * argument)
 		  startTick = osKernelSysTick();
 		  while(startTick + rxTimeout > osKernelSysTick())
 		  {
-			  if(NRF_getInterrupt_B(true))
+			  if(NRF_getIRQ_B(true))
 			  {
 #if NRF_DEBUG_MESSAGE
 				  printf("pRX IRQ\n");
