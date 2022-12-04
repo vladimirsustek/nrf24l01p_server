@@ -1,0 +1,77 @@
+1) Measure time of PTX and PRX execution, 
+   note that the PRX's must be shorter to start
+   receive before PTX transmits.
+   -> implement us timer (snake has)
+   -> measure valid and invalid PRX and PTX cycle
+
+e.g.
+
+#if DEBUG_EXECUTION_TIME
+#define STOPWATCH_INIT()		(HAL_TIM_Base_Start(&htim1))
+#define STOPWATCH_START() 		(htim1.Instance->CNT = 0)
+#define STOPWATCH_STOP()  		(htim1.Instance->CNT)
+#define STOPWATCH_PRINT(idx) 	(printf("%d:%lu\n",(idx), STOPWATCH_STOP()))
+#else
+#define STOPWATCH_INIT()		({})
+#define STOPWATCH_START() 		({})
+#define STOPWATCH_STOP() 		({})
+#define STOPWATCH_PRINT(idx)	({(idx);})
+#endif
+
+
+Think twice, because counter may count only 65535 units, 
+so when measuring 0us 65536 is too much for counter.
+
+void MX_TIM1_Init(void)
+{
+
+  /* USER CODE BEGIN TIM1_Init 0 */
+
+  /* USER CODE END TIM1_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM1_Init 1 */
+
+  /* USER CODE END TIM1_Init 1 */
+  htim1.Instance = TIM1;
+  htim1.Init.Prescaler = 1080;
+  htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim1.Init.Period = 65535;
+  htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim1.Init.RepetitionCounter = 0;
+  htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim1, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterOutputTrigger2 = TIM_TRGO2_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim1, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM1_Init 2 */
+
+  /* USER CODE END TIM1_Init 2 */
+
+}
+
+2) Add posibility to disable ACK_PAYLOAD ... just simplex
+
+
+3) Add an OUT and an IN point for PTX and PRX such
+   that dummy or user data are sent.
+   
+   Probably queue
+   
+4) Implement an protocol that when data shall be sent, 
+   shorten PTX-PRX cycle to shortest possible,
+   otherwise find smallest minimum (1s-1min)

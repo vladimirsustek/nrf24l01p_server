@@ -40,10 +40,12 @@
 /* USER CODE BEGIN PD */
 #define NRF_DEBUG_MESSAGE 0
 #define PRINT_PAYLOAD 0
-#define PTX_BYTES_PER_SECOND 1
+#define PTX_BYTES_PER_SECOND 0
 #define PRX_BYTES_PER_SECOND 1
 #define COMMUNICATION_PERIOD 1
-#define MEASUREMENT_PERIOD 1000
+#define SECOND_PERIOD 1000
+#define FIVE_SECONDS_PERIOD 5
+#define MAX_STATUS_READ_ATTEMPTS 3
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -62,6 +64,7 @@ uint8_t PTXreceives[33] = {0};
 osThreadId defaultTaskHandle;
 osThreadId ptxTaskHandle;
 osThreadId prxTaskHandle;
+osMutexId myMutex01Handle;
 
 /* Private function prototypes -----------------------------------------------*/
 /* USER CODE BEGIN FunctionPrototypes */
@@ -99,6 +102,10 @@ void MX_FREERTOS_Init(void) {
   /* USER CODE BEGIN Init */
 
   /* USER CODE END Init */
+  /* Create the mutex(es) */
+  /* definition and creation of myMutex01 */
+  osMutexDef(myMutex01);
+  myMutex01Handle = osMutexCreate(osMutex(myMutex01));
 
   /* USER CODE BEGIN RTOS_MUTEX */
   /* add mutexes, ... */
@@ -165,18 +172,51 @@ void startPtxTask(void const * argument)
   /* USER CODE BEGIN startPtxTask */
 	  const uint8_t RX_PIPE = 0;
 	  const uint32_t rxTimeout = 5;
-	  uint8_t status;
+	  uint8_t maxAttempt = 0;
+	  uint8_t status = 0;
 	  uint8_t pipe;
 	  uint8_t rxLng;
+	  uint32_t noCommunicationLength;
 	  uint32_t startTick;
 	  uint32_t byteCnt = 0;
-#if  PTX_BYTES_PER_SECOND
-  uint32_t tick = osKernelSysTick();
-#endif
+	  uint32_t tick = osKernelSysTick();
   /* Infinite loop */
   for(;;)
   {
+	  NRF_powerDown();
+	  osDelay(500);
+	  NRF_powerUp();
+	  osDelay(300);
+	  do
+	  {
+		  osMutexWait(myMutex01Handle, osWaitForever);
+		  status = NRF_getSTATUS();
+		  osMutexRelease(myMutex01Handle);
+		  maxAttempt++;
+		  osDelay(500);
+
+	  } while ((status != 0x0E) | (maxAttempt <= MAX_STATUS_READ_ATTEMPTS));
+
+	  maxAttempt = 0;
+
+	  if(maxAttempt <= MAX_STATUS_READ_ATTEMPTS && status == 0x0E)
+	  {
+		  if(0x0E == status)
+		  {
+			  //printf("pTX init OK\n");
+		  }
+	  }
+	  else
+	  {
+		  if(0x0E != status)
+		  {
+			  //printf("pTX init fail\n");
+			  continue;
+		  }
+	  }
+
 	  NRF_configure(true);
+
 	  while(1)
 	  {
 		  sprintf((char*)PTXsends, "%032ld", 0x7FFFFFFF - HAL_GetTick());
@@ -240,15 +280,31 @@ void startPtxTask(void const * argument)
 			  }
 		  }
 
-#if PTX_BYTES_PER_SECOND
-		  if(tick + MEASUREMENT_PERIOD < osKernelSysTick())
+		  if(tick + SECOND_PERIOD < osKernelSysTick())
 		  {
-			  printf("pTX: %ld B /%d ms\n", byteCnt, MEASUREMENT_PERIOD);
+#if PTX_BYTES_PER_SECOND
+			  printf("pTX: %ld B /%d ms\n", byteCnt, SECOND_PERIOD);
+#endif
+
+			  if(0 == byteCnt)
+			  {
+				  noCommunicationLength++;
+			  }
+			  else
+			  {
+				  noCommunicationLength = 0;
+			  }
 			  byteCnt = 0;
 			  tick = osKernelSysTick();
 		  }
-#endif
-		  osDelay(COMMUNICATION_PERIOD);
+
+		  if(noCommunicationLength > FIVE_SECONDS_PERIOD)
+		  {
+			  noCommunicationLength = 0;
+			  break;
+		  }
+
+		  osDelay(10*COMMUNICATION_PERIOD);
 	  }
   }
   /* USER CODE END startPtxTask */
@@ -266,19 +322,51 @@ void startPrxTask(void const * argument)
   /* USER CODE BEGIN startPrxTask */
   const uint8_t RX_PIPE = 0;
   const uint32_t rxTimeout = 100;
+  uint8_t maxAttempt = 0;
   uint8_t status;
   uint8_t pipe;
   uint8_t rxLng;
+  uint32_t noCommunicationLength = 0;
   uint32_t startTick;
   uint32_t byteCnt = 0;
-
-#if  PRX_BYTES_PER_SECOND
   uint32_t tick = osKernelSysTick();
-#endif
+
   /* Infinite loop */
   for(;;)
   {
+	  NRF_powerDown_B();
+	  osDelay(500);
+	  NRF_powerUp_B();
+	  osDelay(300);
+	  do
+	  {
+		  status = NRF_getSTATUS_B();
+		  maxAttempt++;
+		  osDelay(500);
+
+	  } while ((status != 0x0E) | (maxAttempt <= MAX_STATUS_READ_ATTEMPTS));
+
+	  maxAttempt = 0;
+
+	  if(maxAttempt <= MAX_STATUS_READ_ATTEMPTS && status == 0x0E)
+	  {
+		  if(0x0E == status)
+		  {
+			  //printf("pRX init OK\n");
+		  }
+	  }
+	  else
+	  {
+		  if(0x0E != status)
+		  {
+			  //printf("pRX init fail\n");
+			  continue;
+
+		  }
+	  }
+
 	  NRF_configure_B(false);
+
 	  while(1)
 	  {
 
@@ -359,26 +447,31 @@ void startPrxTask(void const * argument)
 			  NRF_setSTATUS_B(1 << TX_FULL);
 		  }
 
-#if PRX_BYTES_PER_SECOND
-		  if(tick + MEASUREMENT_PERIOD < osKernelSysTick())
+		  if(tick + SECOND_PERIOD < osKernelSysTick())
 		  {
-			  printf("pRX: %ld B /%d ms\n", byteCnt, MEASUREMENT_PERIOD);
+#if PRX_BYTES_PER_SECOND
+			  printf("pRX: %ld B /%d ms\n", byteCnt, SECOND_PERIOD);
+#endif
+			  if(0 == byteCnt)
+			  {
+				  noCommunicationLength++;
+			  }
+			  else
+			  {
+				  noCommunicationLength = 0;
+			  }
 			  byteCnt = 0;
 			  tick = osKernelSysTick();
 		  }
-#endif
-		  /* For receiver which haven't sent ACK PAYLOAD - Flush */
-		  /* TODO: use and test NRF_setREUSE_TX_PL() */
-		  if((status & RX_P_NO_2) && (status & RX_P_NO_1) && (status & RX_P_NO_0))
+
+		  if(noCommunicationLength > FIVE_SECONDS_PERIOD)
 		  {
-			  NRF_setFLUSH_TX_B();
+			  noCommunicationLength = 0;
+			  break;
 		  }
 
 		  osDelay(COMMUNICATION_PERIOD);
-
-
 	  }
-
   }
   /* USER CODE END startPrxTask */
 }

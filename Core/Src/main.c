@@ -95,56 +95,7 @@ int main(void)
   MX_USART3_UART_Init();
   MX_SPI1_Init();
   /* USER CODE BEGIN 2 */
-
   UARTstartISR();
-
-
-  NRF_powerDown();
-  NRF_powerDown_B();
-
-  HAL_Delay(500);
-
-  NRF_powerUp();
-  NRF_powerUp_B();
-
-  HAL_Delay(150);
-
-  uint8_t status = 0, status_B = 0, maxAttempt = 0;
-  do
-  {
-	  status = NRF_getSTATUS();
-	  status_B = NRF_getSTATUS_B();
-	  maxAttempt++;
-	  HAL_Delay(500);
-
-  } while (((status != 0x0E) ||
-		  (status_B != 0x0E)) ||
-		  (maxAttempt >= 3));
-
-  if(maxAttempt <= 3 && status == 0x0E && status_B == 0x0E)
-  {
-	  if(0x0E == status)
-	  {
-		  printf("pRX init OK\n");
-	  }
-	  if(0x0E == status_B)
-	  {
-		  printf("pTX init OK\n");
-	  }
-
-  }
-  else
-  {
-	  if(0x0E != status)
-	  {
-		  printf("pRX init fail\n");
-	  }
-	  if(0x0E != status_B)
-	  {
-		  printf("pTX init fail\n");
-	  }
-  }
-
   /* USER CODE END 2 */
 
   /* Call init function for freertos objects (in freertos.c) */
