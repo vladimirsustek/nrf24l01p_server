@@ -75,8 +75,11 @@ void NRF_configure_B(bool ptx_nprx);
  void NRF_CEactivate_B(void);
  void NRF_CEdeactivate_B(void);
 
- uint8_t NRF_getIRQ_B(uint8_t clear);
+ uint8_t NRF_getIRQ_B();
 
  void NRF_powerUp_B(void);
  void NRF_powerDown_B(void);
+
+ uint32_t NRF_activeRF_B(uint32_t (*msTickGet)(), void (*msDelay)(uint32_t), uint32_t timeOut);
+ uint8_t NRF_postProcess_B(uint8_t pipe, uint8_t* rxBuff);
 #endif /* NRF24L01P_DRIVER_B_H_ */

@@ -67,8 +67,11 @@ osMutexId myMutex01Handle;
 
 /* Private function prototypes -----------------------------------------------*/
 /* USER CODE BEGIN FunctionPrototypes */
-uint8_t NRF_postProcess(uint8_t pipe, uint8_t* rxBuff);
 uint8_t NRF_postProcess_B(uint8_t pipe, uint8_t* rxBuff);
+uint8_t NRF_postProcess(uint8_t pipe, uint8_t* rxBuff);
+uint32_t NRF_activeRF_B(uint32_t (*msTickGet)(), void (*msDelay)(uint32_t), uint32_t timeOut);
+uint32_t NRF_activeRF(uint32_t (*msTickGet)(), void (*msDelay)(uint32_t), uint32_t timeOut);
+void NRF_delay(uint32_t millisec) {osDelay(millisec);}
 /* USER CODE END FunctionPrototypes */
 
 void StartDefaultTask(void const * argument);
@@ -171,11 +174,10 @@ void startPtxTask(void const * argument)
 {
   /* USER CODE BEGIN startPtxTask */
 	  const uint8_t RX_PIPE = 0;
-	  const uint32_t rxTimeout = 5;
+	  const uint32_t TX_TIMEOUT = 5;
 	  uint8_t maxAttempt = 0;
 	  uint8_t status = 0;
 	  uint32_t noCommunicationLength;
-	  uint32_t startTick;
 	  uint32_t byteCnt = 0;
 	  uint32_t tick = osKernelSysTick();
   /* Infinite loop */
@@ -187,9 +189,7 @@ void startPtxTask(void const * argument)
 	  osDelay(300);
 	  do
 	  {
-		  osMutexWait(myMutex01Handle, osWaitForever);
 		  status = NRF_getSTATUS();
-		  osMutexRelease(myMutex01Handle);
 		  maxAttempt++;
 		  osDelay(500);
 
@@ -217,21 +217,7 @@ void startPtxTask(void const * argument)
 	  {
 		  sprintf((char*)PTXsends, "%032ld", 0x7FFFFFFF - HAL_GetTick());
 		  NRF_setW_TX_PAYLOAD(PTXsends, strlen((char*)PTXsends));
-
-		  NRF_CEactivate();
-		  startTick = osKernelSysTick();
-		  while(startTick + rxTimeout > osKernelSysTick())
-		  {
-			  if(NRF_getIRQ())
-			  {
-				  startTick = 0;
-				  break;
-			  }
-			  osDelay(1);
-		  }
-
-		  NRF_CEdeactivate();
-		  status = NRF_getSTATUS();
+		  NRF_activeRF(osKernelSysTick, NRF_delay, TX_TIMEOUT);
 		  byteCnt += NRF_postProcess(RX_PIPE, PTXreceives);
 
 		  if(tick + SECOND_PERIOD < osKernelSysTick())
@@ -275,11 +261,10 @@ void startPrxTask(void const * argument)
 {
   /* USER CODE BEGIN startPrxTask */
   const uint8_t RX_PIPE = 0;
-  const uint32_t rxTimeout = 100;
+  const uint32_t RX_TIMEOUT = 100;
   uint8_t maxAttempt = 0;
   uint8_t status;
   uint32_t noCommunicationLength = 0;
-  uint32_t startTick;
   uint32_t byteCnt = 0;
   uint32_t tick = osKernelSysTick();
 
@@ -324,25 +309,9 @@ void startPrxTask(void const * argument)
 
 		  sprintf((char*)PRXsends, "%032ld", 0x7FFFFFFF - HAL_GetTick());
 		  NRF_set_W_ACK_PAYLOAD_B(0, PRXsends, strlen((char*)PRXsends));
-
-		  NRF_CEactivate_B();
-
-		  startTick = osKernelSysTick();
-		  while(startTick + rxTimeout > osKernelSysTick())
-		  {
-			  if(NRF_getIRQ_B(true))
-			  {
-#if NRF_DEBUG_MESSAGE
-				  printf("pRX IRQ\n");
-#endif
-				  startTick = 0;
-				  break;
-			  }
-			  osDelay(1);
-		  }
-
-		  NRF_CEdeactivate_B();
+		  NRF_activeRF_B(osKernelSysTick, NRF_delay, RX_TIMEOUT);
 		  byteCnt += NRF_postProcess_B(RX_PIPE, PRXreceives);
+
 		  if(tick + SECOND_PERIOD < osKernelSysTick())
 		  {
 #if PRX_BYTES_PER_SECOND
@@ -374,89 +343,5 @@ void startPrxTask(void const * argument)
 
 /* Private application code --------------------------------------------------*/
 /* USER CODE BEGIN Application */
-uint8_t NRF_postProcess_B(uint8_t pipe, uint8_t* rxBuff)
-{
-    uint8_t rxBytes = 0;
-	uint8_t wStatus = 0;
-	uint8_t rPipe = 0xFF;
-	uint8_t rStatus = NRF_getSTATUS_B();
-
-	if(rStatus & (1 << MAX_RT))
-	{
-	  wStatus |= (1 << MAX_RT);
-	}
-	if(rStatus & (1 << TX_FULL))
-	{
-	  wStatus |= (1 << TX_FULL);
-	}
-	if(rStatus & (1 << TX_DS))
-	{
-	  wStatus |= (1 << TX_DS);
-	}
-	if(rStatus & (1 << RX_DR))
-	{
-
-		rPipe = ((rStatus & RX_P_NO_2) |
-			  (rStatus & RX_P_NO_1) |
-			  (rStatus & RX_P_NO_0)) << 1;
-	  if(pipe == rPipe)
-	  {
-		  rxBytes = NRF_getR_RX_PL_WID_B();
-		  NRF_getR_RX_PAYLOAD_B(rxBuff, rxBytes);
-		  wStatus |= (1 << RX_DR);
-	  }
-	}
-	if(wStatus)
-	{
-		NRF_setSTATUS_B(wStatus);
-		if(rStatus & (1 << MAX_RT))
-		{
-			NRF_setFLUSH_TX_B();
-		}
-	}
-	return rxBytes;
-}
-
-uint8_t NRF_postProcess(uint8_t pipe, uint8_t* rxBuff)
-{
-    uint8_t rxBytes = 0;
-	uint8_t wStatus = 0;
-	uint8_t rPipe = 0xFF;
-	uint8_t rStatus = NRF_getSTATUS();
-
-	if(rStatus & (1 << MAX_RT))
-	{
-	  wStatus |= (1 << MAX_RT);
-	}
-	if(rStatus & (1 << TX_FULL))
-	{
-	  wStatus |= (1 << TX_FULL);
-	}
-	if(rStatus & (1 << TX_DS))
-	{
-	  wStatus |= (1 << TX_DS);
-	}
-	if(rStatus & (1 << RX_DR))
-	{
-		rPipe = ((rStatus & RX_P_NO_2) |
-			  (rStatus & RX_P_NO_1) |
-			  (rStatus & RX_P_NO_0)) << 1;
-	  if(rPipe == pipe)
-	  {
-		  rxBytes = NRF_getR_RX_PL_WID();
-		  NRF_getR_RX_PAYLOAD(rxBuff, rxBytes);
-		  wStatus |= (1 << RX_DR);
-	  }
-	}
-	if(wStatus)
-	{
-		NRF_setSTATUS(wStatus);
-		if(rStatus & (1 << MAX_RT))
-		{
-			NRF_setFLUSH_TX();
-		}
-	}
-	return rxBytes;
-}
 /* USER CODE END Application */
 

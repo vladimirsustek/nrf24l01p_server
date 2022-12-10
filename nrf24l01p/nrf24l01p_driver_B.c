@@ -913,9 +913,8 @@ uint8_t NRF_getNOP_B(void)
 /**
   * @brief Get interrupt flag. Shall be used by application to read whether IRQ fired.
   *
-  * @param clear the interrupt when is asserted.
   */
-uint8_t NRF_getIRQ_B(uint8_t clear)
+uint8_t NRF_getIRQ_B(void)
 {
 	return nrfport_getIRQ_B();
 }
@@ -956,7 +955,6 @@ void NRF_powerUp_B(void)
 }
 
 
-
 /**
  * @brief Power down the device (power supply line).
  */
@@ -964,3 +962,104 @@ void NRF_powerDown_B(void)
 {
 	nrfport_powerDown_B();
 }
+
+
+/**
+ * @brief Activate RF stage of the NRF24L01 - start transmit/receive
+ * @param msTickGet pointer to function providing HOST sysTick in millisecond.
+ * @param msDelay pointer to function providing HOST delay in millisecond.
+ * @param timeOut argument for the msDelay pointer function
+ *
+ * @detail Function is supposed to be called in order to receive or transmit.
+ * Before the function is called, NRF must be appropriately set to either PRX or
+ * PTX. PAYLOAD and "ACK_PAYLOAD" must be stored also in prior. Function uses
+ * host tick functions to wait for a period specified by the timeOut until an IRQ
+ * fires.
+ *
+ * @return 0 when successful, function tick time otherwise
+ */
+uint32_t NRF_activeRF_B(uint32_t (*msTickGet)(), void (*msDelay)(uint32_t), uint32_t timeOut)
+{
+	if((NULL == msTickGet) || (NULL == msDelay) || (timeOut < 0))
+	{
+		return (uint32_t)-1;
+	}
+
+	  uint32_t startTick = msTickGet();
+
+	  NRF_CEactivate_B();
+
+	  while(startTick + timeOut > msTickGet())
+	  {
+		  if(NRF_getIRQ_B())
+		  {
+			  startTick = 0;
+			  break;
+		  }
+		  msDelay(1);
+	  }
+
+	  NRF_CEdeactivate_B();
+
+	  return startTick;
+}
+
+
+/**
+ * @brief Activate RF stage of the NRF24L01 - start transmit/receive
+ * @param pipe pointer to function providing HOST sysTick in millisecond.
+ * @param rxBuff buffer where payload or ACK_PAYLOAD shall be copied.
+ *
+ * @detail Function checks status of the device for any transmit/receive
+ * event and behaves in order to reset state and retrieve payload.
+ *
+ * When receive did not succeed
+ *
+ * @return 0 when receive or transmit did not succeed, 1 - 32 when receive
+ * succeeded (amount of bytes) and 255 when only transmit (no ACK_PAYLOAD received)
+ * succeeded.
+ */
+uint8_t NRF_postProcess_B(uint8_t pipe, uint8_t* rxBuff)
+{
+    uint8_t rxBytes = 0;
+	uint8_t wStatus = 0;
+	uint8_t rPipe = 0xFF;
+	uint8_t rStatus = NRF_getSTATUS_B();
+
+	if(rStatus & (1 << MAX_RT))
+	{
+	  wStatus |= (1 << MAX_RT);
+	}
+	if(rStatus & (1 << TX_FULL))
+	{
+	  wStatus |= (1 << TX_FULL);
+	}
+	if(rStatus & (1 << TX_DS))
+	{
+	  wStatus |= (1 << TX_DS);
+	  rxBytes = (uint8_t)(-1);
+	}
+	if(rStatus & (1 << RX_DR))
+	{
+
+		rPipe = ((rStatus & RX_P_NO_2) |
+			  (rStatus & RX_P_NO_1) |
+			  (rStatus & RX_P_NO_0)) << 1;
+	  if(pipe == rPipe)
+	  {
+		  rxBytes = NRF_getR_RX_PL_WID_B();
+		  NRF_getR_RX_PAYLOAD_B(rxBuff, rxBytes);
+		  wStatus |= (1 << RX_DR);
+	  }
+	}
+	if(wStatus)
+	{
+		NRF_setSTATUS_B(wStatus);
+		if(rStatus & (1 << MAX_RT))
+		{
+			NRF_setFLUSH_TX_B();
+		}
+	}
+	return rxBytes;
+}
+
