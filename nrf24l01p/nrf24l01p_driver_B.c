@@ -1063,3 +1063,33 @@ uint8_t NRF_postProcess_B(uint8_t pipe, uint8_t* rxBuff)
 	return rxBytes;
 }
 
+
+/**
+ * @brief Power cycle (off/on) the NRF device and check whether is functional.
+ * @param msDelay pointer to a HOST function implementing delay in milliseconds.
+ *
+ * @return 0x0E when functional, otherwise any different number.
+ */
+uint32_t NRF_powerCycle_B(void (*msDelay)(uint32_t))
+{
+
+	  uint32_t attempts = 0;
+	  uint8_t status;
+
+	  NRF_powerDown_B();
+	  msDelay(100);
+	  NRF_powerUp_B();
+	  msDelay(100);
+
+	  do
+	  {
+		  status = NRF_getSTATUS_B();
+		  attempts++;
+		  msDelay(100);
+
+	  } while ((status != 0x0E) | (attempts <= MAX_DEVICE_POWER_CYCLE_ATTEMPTS));
+
+
+	  return (uint32_t)status;
+}
+

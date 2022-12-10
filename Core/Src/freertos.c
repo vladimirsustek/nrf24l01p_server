@@ -37,14 +37,7 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define NRF_DEBUG_MESSAGE 0
-#define PRINT_PAYLOAD 0
-#define PTX_BYTES_PER_SECOND 0
-#define PRX_BYTES_PER_SECOND 1
 #define COMMUNICATION_PERIOD 1
-#define SECOND_PERIOD 1000
-#define FIVE_SECONDS_PERIOD 5
-#define MAX_STATUS_READ_ATTEMPTS 3
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -67,11 +60,8 @@ osMutexId myMutex01Handle;
 
 /* Private function prototypes -----------------------------------------------*/
 /* USER CODE BEGIN FunctionPrototypes */
-uint8_t NRF_postProcess_B(uint8_t pipe, uint8_t* rxBuff);
-uint8_t NRF_postProcess(uint8_t pipe, uint8_t* rxBuff);
-uint32_t NRF_activeRF_B(uint32_t (*msTickGet)(), void (*msDelay)(uint32_t), uint32_t timeOut);
-uint32_t NRF_activeRF(uint32_t (*msTickGet)(), void (*msDelay)(uint32_t), uint32_t timeOut);
 void NRF_delay(uint32_t millisec) {osDelay(millisec);}
+uint32_t NRF_appTimeOutStats(bool printStatistics, uint32_t* pByteCnt, uint32_t *pTick, uint32_t* pNoComPeriod);
 /* USER CODE END FunctionPrototypes */
 
 void StartDefaultTask(void const * argument);
@@ -175,40 +165,15 @@ void startPtxTask(void const * argument)
   /* USER CODE BEGIN startPtxTask */
 	  const uint8_t RX_PIPE = 0;
 	  const uint32_t TX_TIMEOUT = 5;
-	  uint8_t maxAttempt = 0;
-	  uint8_t status = 0;
-	  uint32_t noCommunicationLength;
+	  uint32_t noComPeriod = 0;
 	  uint32_t byteCnt = 0;
 	  uint32_t tick = osKernelSysTick();
   /* Infinite loop */
   for(;;)
   {
-	  NRF_powerDown();
-	  osDelay(500);
-	  NRF_powerUp();
-	  osDelay(300);
-	  do
+	  if(0x0E != NRF_powerCycle(NRF_delay))
 	  {
-		  status = NRF_getSTATUS();
-		  maxAttempt++;
-		  osDelay(500);
-
-	  } while ((status != 0x0E) | (maxAttempt <= MAX_STATUS_READ_ATTEMPTS));
-
-	  maxAttempt = 0;
-
-	  if(maxAttempt <= MAX_STATUS_READ_ATTEMPTS && status == 0x0E)
-	  {
-		  if(0x0E == status)
-		  {
-		  }
-	  }
-	  else
-	  {
-		  if(0x0E != status)
-		  {
-			  continue;
-		  }
+		  continue;
 	  }
 
 	  NRF_configure(true);
@@ -216,33 +181,12 @@ void startPtxTask(void const * argument)
 	  while(1)
 	  {
 		  sprintf((char*)PTXsends, "%032ld", 0x7FFFFFFF - HAL_GetTick());
+
 		  NRF_setW_TX_PAYLOAD(PTXsends, strlen((char*)PTXsends));
 		  NRF_activeRF(osKernelSysTick, NRF_delay, TX_TIMEOUT);
 		  byteCnt += NRF_postProcess(RX_PIPE, PTXreceives);
 
-		  if(tick + SECOND_PERIOD < osKernelSysTick())
-		  {
-#if PTX_BYTES_PER_SECOND
-			  printf("pTX: %ld B /%d ms\n", byteCnt, SECOND_PERIOD);
-#endif
-
-			  if(0 == byteCnt)
-			  {
-				  noCommunicationLength++;
-			  }
-			  else
-			  {
-				  noCommunicationLength = 0;
-			  }
-			  byteCnt = 0;
-			  tick = osKernelSysTick();
-		  }
-
-		  if(noCommunicationLength > FIVE_SECONDS_PERIOD)
-		  {
-			  noCommunicationLength = 0;
-			  break;
-		  }
+		  if(0 == NRF_appTimeOutStats(false, &byteCnt, &tick, &noComPeriod)) { break;}
 
 		  osDelay(10*COMMUNICATION_PERIOD);
 	  }
@@ -262,78 +206,25 @@ void startPrxTask(void const * argument)
   /* USER CODE BEGIN startPrxTask */
   const uint8_t RX_PIPE = 0;
   const uint32_t RX_TIMEOUT = 100;
-  uint8_t maxAttempt = 0;
-  uint8_t status;
-  uint32_t noCommunicationLength = 0;
+  uint32_t noComPeriod = 0;
   uint32_t byteCnt = 0;
   uint32_t tick = osKernelSysTick();
 
   /* Infinite loop */
   for(;;)
   {
-	  NRF_powerDown_B();
-	  osDelay(500);
-	  NRF_powerUp_B();
-	  osDelay(300);
-	  do
-	  {
-		  status = NRF_getSTATUS_B();
-		  maxAttempt++;
-		  osDelay(500);
-
-	  } while ((status != 0x0E) | (maxAttempt <= MAX_STATUS_READ_ATTEMPTS));
-
-	  maxAttempt = 0;
-
-	  if(maxAttempt <= MAX_STATUS_READ_ATTEMPTS && status == 0x0E)
-	  {
-		  if(0x0E == status)
-		  {
-			  //printf("pRX init OK\n");
-		  }
-	  }
-	  else
-	  {
-		  if(0x0E != status)
-		  {
-			  //printf("pRX init fail\n");
-			  continue;
-
-		  }
-	  }
+	  if(0x0E != NRF_powerCycle_B(NRF_delay)) { continue; }
 
 	  NRF_configure_B(false);
 
 	  while(1)
 	  {
-
 		  sprintf((char*)PRXsends, "%032ld", 0x7FFFFFFF - HAL_GetTick());
 		  NRF_set_W_ACK_PAYLOAD_B(0, PRXsends, strlen((char*)PRXsends));
 		  NRF_activeRF_B(osKernelSysTick, NRF_delay, RX_TIMEOUT);
 		  byteCnt += NRF_postProcess_B(RX_PIPE, PRXreceives);
 
-		  if(tick + SECOND_PERIOD < osKernelSysTick())
-		  {
-#if PRX_BYTES_PER_SECOND
-			  printf("pRX: %ld B /%d ms\n", byteCnt, SECOND_PERIOD);
-#endif
-			  if(0 == byteCnt)
-			  {
-				  noCommunicationLength++;
-			  }
-			  else
-			  {
-				  noCommunicationLength = 0;
-			  }
-			  byteCnt = 0;
-			  tick = osKernelSysTick();
-		  }
-
-		  if(noCommunicationLength > FIVE_SECONDS_PERIOD)
-		  {
-			  noCommunicationLength = 0;
-			  break;
-		  }
+		  if(0 == NRF_appTimeOutStats(true, &byteCnt, &tick, &noComPeriod)) { break;}
 
 		  osDelay(COMMUNICATION_PERIOD);
 	  }
@@ -343,5 +234,52 @@ void startPrxTask(void const * argument)
 
 /* Private application code --------------------------------------------------*/
 /* USER CODE BEGIN Application */
+
+
+/**
+ * @brief Statistic function to check received bytes, compare timeout tick and invoke reset return value.
+ * @param printStatistics when true prints statistic information.
+ * @pByteCnt value passed by pointer.
+ * @pTick value passed by pointer.
+ * @pNoComPeriod value passed by pointer.
+ *
+ * @return 0 when reset needed, (uint32_t)(-1) otherwise.
+ */
+uint32_t NRF_appTimeOutStats(bool printStatistics, uint32_t* pByteCnt, uint32_t *pTick, uint32_t* pNoComPeriod)
+{
+
+const uint32_t SECOND_PERIOD = 1000;
+const uint32_t FIVE_SECONDS_PERIOD = 5;
+
+	uint32_t aux = (uint32_t)(-1);
+
+	  if(*pTick + SECOND_PERIOD < osKernelSysTick())
+	  {
+		  if(printStatistics)
+		  {
+			  printf("pRX: %ld B /%ld ms\n", *pByteCnt, SECOND_PERIOD);
+		  }
+
+		  if(0 == *pByteCnt)
+		  {
+			  *pNoComPeriod = *pNoComPeriod + 1;
+		  }
+		  else
+		  {
+			  *pNoComPeriod = 0;
+		  }
+
+		  *pByteCnt = 0;
+		  *pTick = osKernelSysTick();
+	  }
+
+	  if(*pNoComPeriod > FIVE_SECONDS_PERIOD)
+	  {
+		  *pNoComPeriod = 0;
+		  aux = 0;
+	  }
+
+	  return aux;
+}
 /* USER CODE END Application */
 

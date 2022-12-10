@@ -12,6 +12,8 @@
 #include <stdbool.h>
 #include <ctype.h>
 
+#define MAX_DEVICE_POWER_CYCLE_ATTEMPTS (uint32_t)(3)
+
 #define WR_BYTE_LNG		 (uint32_t)(2)
 #define WR_BYTE_PLD		 (uint32_t)(1)
 #define WR_BYTE_CMD		 (uint32_t)(0)

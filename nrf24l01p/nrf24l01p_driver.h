@@ -80,5 +80,5 @@ void NRF_configure(bool ptx_nprx);
 
  uint32_t NRF_activeRF(uint32_t (*msTickGet)(), void (*msDelay)(uint32_t), uint32_t timeOut);
  uint8_t NRF_postProcess(uint8_t pipe, uint8_t* rxBuff);
-
+ uint32_t NRF_powerCycle(void (*msDelay)(uint32_t));
 #endif /* INC_NRF24L01P_DRIVER_H_ */
