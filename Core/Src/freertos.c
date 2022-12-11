@@ -164,7 +164,7 @@ void startPtxTask(void const * argument)
 {
   /* USER CODE BEGIN startPtxTask */
 	  const uint8_t RX_PIPE = 0;
-	  const uint32_t TX_TIMEOUT = 5;
+	  const uint32_t TX_TIMEOUT = 3;
 	  uint32_t noComPeriod = 0;
 	  uint32_t byteCnt = 0;
 	  uint32_t tick = osKernelSysTick();
@@ -188,7 +188,7 @@ void startPtxTask(void const * argument)
 
 		  if(0 == NRF_appTimeOutStats(false, &byteCnt, &tick, &noComPeriod)) { break;}
 
-		  osDelay(10*COMMUNICATION_PERIOD);
+		  osDelay(2*COMMUNICATION_PERIOD);
 	  }
   }
   /* USER CODE END startPtxTask */
@@ -205,7 +205,7 @@ void startPrxTask(void const * argument)
 {
   /* USER CODE BEGIN startPrxTask */
   const uint8_t RX_PIPE = 0;
-  const uint32_t RX_TIMEOUT = 100;
+  const uint32_t RX_TIMEOUT = 20;
   uint32_t noComPeriod = 0;
   uint32_t byteCnt = 0;
   uint32_t tick = osKernelSysTick();

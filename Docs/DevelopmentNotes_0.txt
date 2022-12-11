@@ -25,6 +25,7 @@ prx_time_0		56	     sprintf((char*)PRXsends, "%032ld", 0x7FFFFFFF - HAL_GetTick(
 prx_time_1		121	     NRF_set_W_ACK_PAYLOAD_B(0, PRXsends, strlen((char*)PRXsends));
 prx_time_2		6757	 NRF_activeRF_B(osKernelSysTick, NRF_delay, RX_TIMEOUT); // receive
 prx_time_3		183	     byteCnt += NRF_postProcess_B(RX_PIPE, PRXreceives);
+                         osDelay(1)
 
 RTOS Thread PTX "Transmitter"
 
@@ -32,14 +33,36 @@ ptx_time_0		55	     sprintf((char*)PTXsends, "%032ld", 0x7FFFFFFF - HAL_GetTick(
 ptx_time_1		121	     NRF_setW_TX_PAYLOAD(PTXsends, strlen((char*)PTXsends));
 ptx_time_2		10	     NRF_activeRF(osKernelSysTick, NRF_delay, TX_TIMEOUT);
 ptx_time_3		183	     byteCnt += NRF_postProcess(RX_PIPE, PTXreceives);
+                         osDelay(10)
 
-
+* dependent on the osDelay, when PTX's osDelay(10) unstable 1.4kB/s - 16kB/s
+ 
 POSITIVE TESTING RESULT ->
 Similar to the POSITIVE TESTING RESULT except:
 	NRF_activeRF   ~~ TX_TIMEOUT
 	NRF_activeRF_B ~~ RX_TIMEOUT
 	+ shorter postprocessing
-	
+
+
+(Output Capture Mode No Output, no Interrupt, divider = /(Timer Frequency / 10e6) = 96)
+#if DEBUG_EXECUTION_TIME
+#define STOPWATCH_INIT()		(HAL_TIM_Base_Start(&htim1))
+#define STOPWATCH_START() 		(htim1.Instance->CNT = 0)
+#define STOPWATCH_STOP()  		(htim1.Instance->CNT)
+#define STOPWATCH_PRINT(idx) 	(printf("%d:%lu\n",(idx), STOPWATCH_STOP()))
+#else
+#define STOPWATCH_INIT()		({})
+#define STOPWATCH_START() 		({})
+#define STOPWATCH_STOP() 		({})
+#define STOPWATCH_PRINT(idx)	({(idx);})
+#endif
+
+
+1.1 -> Synchronization:
+
+	a) Find mechanism to synchronize threads to reach max stabile speed.
+	   For instance to delay PTX thread for less than osDelay(1) using
+	   blocking us delay (OC Base Timer loop until ->CNT reaches value)
 ----------------------------------------------------------------------
 ----------------------------------------------------------------------
 
